@@ -1,0 +1,40 @@
+# Root Hydra config. Magic numbers live here, never in code.
+defaults:
+  - wt: sfgfp
+  - executor: local
+  - params: stages
+  - _self_
+
+run_id: ${now:%Y%m%d_%H%M%S}
+runs_dir: workspace/runs
+seed: 42
+git_sha: ""
+
+# External root artifacts (keys consumed by stages but produced by none).
+artifacts:
+  sfgfp_wt_fasta: data/sfgfp_wt.fasta
+  sfgfp_wt_pdb: data/sfgfp_wt.pdb
+  sarkisyan_dms: data/sarkisyan_dms.csv
+  gfps_wt: data/gfps_wt.fasta
+  megascale: data/megascale.csv
+  exclusion_list: data/Exclusion_List.csv
+  previous_top_sequences: data/previous_top_sequences.csv
+  sfgfp_sasa: data/sfgfp_sasa.json
+
+# Stages to run (full DAG by default; override with stages=[prep_wt] etc.).
+stages:
+  - prep_wt
+  - train_probes.brightness
+  - train_probes.stability
+  - generate.ligandmpnn
+  - generate.combinatorial
+  - generate.sampler
+  - generate.merge
+  - filter_brightness
+  - score_stability.thermompnn
+  - score_stability.spurs
+  - score_stability.proteinmpnn
+  - score_stability.esmc
+  - rank_combine
+  - fold_sanity
+  - portfolio

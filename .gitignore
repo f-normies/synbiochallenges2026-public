@@ -1,0 +1,93 @@
+# ───────────────────────── SynBio 2026 .gitignore ─────────────────────────
+# Repo strategy: track our pipeline code (src/, run/), docs, docker launchers,
+# env manifests, and the small WT reference data (data/sfgfp_wt.*). Everything
+# heavy or regenerable is ignored: the enroot image, model weights, HF/mamba
+# caches, and scratch. The upstream tool repos under docker/repos/ are git
+# submodules pinned to exact commits (see .gitmodules), so they ARE tracked.
+
+# ── Secrets / credentials (never commit) ──────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+*_secret*
+*_token*
+settings.json
+.claude/settings.json
+.claude/settings.local.json
+*.sqlite
+*.db
+
+# ── Enroot / container images ─────────────────────────────────────────────
+*.sqsh
+synbio2026.sqsh
+
+# ── Containerless native envs (env/bootstrap.sh output; build-once, regenerable) ──
+# Track the launchers (env/bootstrap.sh, env/synenv.sh, env/bin/synrun, env/README.md);
+# ignore the heavy built artifacts: the shared micromamba root, the fetched binary,
+# and the shared HF/torch weight cache.
+/env/mm/
+/env/bin/micromamba
+/cache/
+
+# ── Model weights (pulled at runtime, never baked / committed) ────────────
+weights/*
+!weights/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.pkl
+*.npz
+*.msgpack
+*.msgpack.zst
+
+# ── Scratch, caches, pipeline run outputs (all under /workspace) ──────────
+workspace/*
+!workspace/.gitkeep
+.cache/
+**/.cache/
+**/__pycache__/
+
+# ── Upstream tool repos under docker/repos/ are git submodules (see .gitmodules) ──
+# (their working trees are managed by the submodule, not ignored here)
+
+# ── Python ────────────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.installed.cfg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+.tox/
+
+# ── Hydra / experiment outputs (per reproducibility convention) ───────────
+outputs/
+multirun/
+.hydra/
+*.log
+
+# ── Analysis artifacts (force-add manually at the end if needed) ──────────
+results*.ipynb
+figures/
+
+# ── Editors / OS junk ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

@@ -1,0 +1,18 @@
+name: esm
+# Biohub ESM SDK v3.3.0 (ESMC 6B + ESMFold2) + the Sarkisyan-DMS regressor fine-tune.
+# torch is pre-installed here so `pip install -e /repos/esm` (run in the Dockerfile)
+# resolves against it (esm needs torch>=2.2.0; 2.4.1 satisfies and is not upgraded).
+# That editable install also pulls a Biohub fork of transformers (git) which
+# provides transformers.models.esmfold2 — ESMFold2 runs via its ESMFold2Model,
+# not the old stock-transformers EsmForProteinFolding.
+# peft: LoRA fine-tune for the brightness probe's branch B (stage 02,
+# ESMCForSequenceClassification + get_peft_model; see cookbook/tutorials/esmc_finetune.ipynb).
+channels: [conda-forge]
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.4.1
+      - peft
+      - scikit-learn

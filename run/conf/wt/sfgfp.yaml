@@ -1,0 +1,6 @@
+# sfGFP wild type reference (FPbase, 238 aa = PDB 2B3P at modeled positions).
+name: sfGFP
+length: 238
+pdb: 2B3P
+fasta: data/sfgfp_wt.fasta
+structure: data/sfgfp_wt.pdb

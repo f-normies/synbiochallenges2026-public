@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# synrun <env> <cmd...>
+#   Run a command inside a tool's isolated micromamba env, with the script-only
+#   repos placed on PYTHONPATH and all caches pointed at the writable mount.
+#
+#   synrun proteinmpnn python /repos/ProteinMPNN/protein_mpnn_run.py --help
+#   synrun esm         python -c "import esm; print(esm.__version__)"
+#   synrun dnatools    python -c "import dnachisel, RNA, Bio; print('ok')"
+#   synrun spurs       bash      # interactive shell in the spurs env
+set -euo pipefail
+
+# shellcheck source=/dev/null
+source /usr/local/bin/synenv.sh
+
+env_name="${1:?usage: synrun <env> <cmd...>}"; shift || true
+
+# Repos without an installable package need to be importable via PYTHONPATH.
+case "$env_name" in
+  proteinmpnn) repo_pp="/repos/ProteinMPNN" ;;
+  ligandmpnn)  repo_pp="/repos/LigandMPNN" ;;
+  thermompnn)  repo_pp="/repos/ThermoMPNN-D:/repos/ThermoMPNN-D/proteinmpnn" ;;
+  *)           repo_pp="" ;;
+esac
+
+new_pp="${repo_pp}"
+[ -n "${PYTHONPATH:-}" ] && new_pp="${new_pp:+$new_pp:}${PYTHONPATH}"
+
+if [ "$#" -eq 0 ]; then set -- bash; fi
+exec micromamba run -n "$env_name" env PYTHONPATH="$new_pp" "$@"

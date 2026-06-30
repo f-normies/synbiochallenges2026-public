@@ -1,0 +1,13 @@
+name: proteinmpnn
+# ProteinMPNN + ProteinMPNN-ddG. Repo ships no requirements file; it is pure
+# torch + numpy. ddG runs as a scoring/tied-decoding mode of the same package.
+channels: [conda-forge]
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.4.1
+      - "numpy<2"
+      - "pandas>=2.0"
+      - "pyarrow>=14"

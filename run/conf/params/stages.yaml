@@ -1,0 +1,155 @@
+# Per-stage params (thresholds, temperatures, pool sizes). Filled by P2–P5.
+# Loaded under the `params` group, so reachable at cfg.params.params[<stage>].
+params:
+  prep_wt:
+    tolerance:
+      gfp_types: [avGFP, amacGFP]   # both 238 aa, align 1:1 with sfGFP
+      eps: 0.8                       # functional if brightness >= type-WT - eps
+      tol_hi: 0.6                    # tolerant if functional fraction >= tol_hi
+      tol_lo: 0.2                    # intolerant if functional fraction <= tol_lo
+      min_cov: 3                     # below this many single subs -> tier "unknown"
+  train_probes.brightness:
+    esmc_6b_model_id: biohub/ESMC-6B   # HF repo (authors' recommended weights)
+    embed_cache_dir: workspace/embed_cache
+    backgrounds: [avGFP]               # sfGFP's lineage; single background (no avGFP/amacGFP nuisance)
+    mut_numbering_offset: 1            # 0-based index = dataset position (Met uncounted)
+    brightness_layer_frac: 0.30        # layer = round(frac * n_layers) -> 24 of 80 (the embedding-sweep win)
+    pool: aromatic                     # chromophore-shell pooling (pocket.resolve_indices)
+    ridge_alpha: 10.0
+    dead_weight: 0.15                  # down-weight dead (y <= live_lo) in the ridge fit
+    live_lo: -1.5                      # regime boundary; isotonic still fits the full range
+    test_frac: 0.1
+    hamming1_guard: true
+    batch_size: 8                      # embedding forward batch
+    bright_spearman_gate: 0.40         # held-out bright-regime Spearman gate (recipe reaches ~0.67)
+    report_mut_bins: [1, 2, 3, 5, 8, 100]
+  train_probes.stability:
+    esmc_6b_model_id: biohub/ESMC-6B
+    embed_cache_dir: workspace/embed_cache
+    stability_layer: -2                  # penultimate (resolved to n_layers-1 for the cache key)
+    pool: mean
+    alpha_grid: [0.01, 0.1, 1, 10, 100, 1000, 1.0e4, 1.0e6]   # tuned on val (paper: 1e-3..1e12)
+    spearman_gate: 0.5                   # per-domain-averaged test Spearman (non-fatal)
+    min_domain_pairs: 10                 # min pairs for a domain to count in per-domain Spearman
+    batch_size: 32                       # embedding forward batch (seqs are <=72 aa)
+    gfp_sanity: true
+  generate.ligandmpnn:
+    model_type: ligand_mpnn
+    checkpoint: "weights/ligandmpnn/ligandmpnn_v_32_010_25.pt"  # v_32_010 (0.10A noise); staged, repo model_params/ is empty
+    ligandmpnn_repo: docker/repos/LigandMPNN   # HPC: path to the LigandMPNN clone (has run.py)
+    temperature: 0.1               # constrained low-T surface/loop redesign
+    n_designs: 1000                # target total designs (= n_subsets * batch_size * batches_per_subset)
+    batch_size: 8
+    batches_per_subset: 4          # designs per LigandMPNN invocation (one random redesign subset)
+    # Per-design redesign-position budget -> keeps designs near-WT (slots 2 & 4). Cluster
+    # calibration (n_mut vs subset size, T=0.1): 30->11, 40->17, 50->22, 65->26, 72~=30.
+    # So size 32-72 lands n_mut ~12-30 (slot-2/4 band; low+mid Hamming).
+    redesign_min: 32
+    redesign_max: 72
+    sasa_exposed_threshold: 0.25   # rel SASA cutoff for "exposed" (matches combinatorial)
+    recharge_bias: 1.5             # b: +b to E/D, +b/2 to Q, -b to K/R on exposed positions
+    omit_aa: "C"                   # no free surface Cys (reducing CFPS env)
+    ligand_mpnn_use_atom_context: 1
+    ligand_mpnn_use_side_chain_context: 1
+  generate.combinatorial:
+    n_designs: 800
+    max_mutations: 16            # combinatorics stays near-WT; high-Hamming is Ч2
+    pocket_cap: 8                # k_bright + k_consensus
+    k_bright: {min: 0, max: 5}
+    k_consensus: {min: 0, max: 4}
+    k_recharge: {min: 0, max: 8}
+    sasa_exposed_threshold: 0.25
+    brightness_eps: 0.5          # neutral_or_better: rel brightness >= -eps
+    enhancing_margin: 0.3        # proven tier: rel brightness >= margin
+    recharge_targets: {K: [E, Q], R: [Q]}
+    include_consensus: true
+    seed_ladders: true
+    low_bucket_max: 8            # Hamming <= this -> "low", else "mid"
+    max_attempts_factor: 50      # sampler attempt budget = factor * n_designs
+  generate.sampler:
+    esmc_600m_model_id: biohub/ESMC-600M
+    esmc_6b_model_id: biohub/ESMC-6B      # brightness rerank backbone (stage-02 probe)
+    embed_cache_dir: workspace/embed_cache
+    n_over: 2000          # over-generate count
+    n_emit: 300           # top-K by B_hat to emit
+    mut_min: 40           # mutation budget lower bound (high-Hamming basket)
+    mut_max: 90           # mutation budget upper bound
+    temperature: 1.0      # Gibbs sampling temperature
+    n_passes: 3           # Gibbs passes over the chosen positions
+    exclude_wt: true      # forbid the WT token at chosen positions -> Hamming = k
+    omit_aa: "C"          # never sample free surface Cys (reducing CFPS env, §4.3)
+    batch_size: 16        # embedding / forward batch
+    nterm_freeze: 10      # positions <= this stay WT (N-terminus)
+  filter_brightness:
+    esmc_6b_model_id: biohub/ESMC-6B   # must match the stage-02 brightness probe's backbone
+    batch_size: 8                       # fused logits+hidden forward batch (variable-length pad)
+    ppl_margin: 1.5          # foldability gate: keep ppl <= ppl_margin × sfGFP's (single-pass OFS)
+    min_brightness: 0.6      # × WT, internal margin (competition floor is 0.3)
+    top_n: 500
+    llr_weight: 0.2          # weak ESMC-6B LLR voice in the top-N cut: (1-w)·B̂ + w·LLR (§7-04в);
+                             # raw LLR is weak (ρ≈0.2-0.3) so keep it low. 0 = pure B̂. Tune on a real run.
+    upside_source_tokens: [sampler]     # `source` substrings that bypass the 0.6× floor (not PPL)
+  rank_combine:
+    top_n: 60
+  fold_sanity:
+    model_id: biohub/ESMFold2
+    torch_dtype: float32   # native esm env lacks fused kernels → fp16 ESMFold2 fold dies
+    #                        (distogram_head Float-vs-Half; autocast(fp16) overflows the
+    #                        diffusion/mask fp32 constants). fp32 fold is correct AND fits
+    #                        (~15GB peak on V100S, activation-bound). See docs/CLUSTER_GOTCHAS.md.
+    num_loops: 3
+    num_sampling_steps: 20
+    num_diffusion_samples: 1
+    fold_top_n: 60
+    try_cro: true
+    cro_position: 65       # ESMFold2 Modification.position is zero-indexed; sfGFP Y66 -> 65
+    fallback_without_cro: true
+    calibrate_with_wt_fold: true   # fold WT through ESMFold2 and use its predicted geometry as the delta baseline (cancels crystal-vs-prediction offset); see _select_wt_baseline
+    require_wt_fold: true          # WT-fold / WT-self-gate failure aborts the stage (spec §8); set false to fall back to the crystal baseline
+    write_structures: true
+    pocket_positions: [65, 66, 67, 96, 148, 203, 222]
+    pocket_distance_positions: [96, 148, 203, 222]
+    barrel_contact_min_seq_sep: 8
+    barrel_contact_cutoff_a: 8.0
+    barrel_contact_slack_a: 2.0
+    # Catastrophe gates (calibrated on the real 60-candidate fold, 2026-06-30). Stage 07 is a
+    # negative filter (tie #2): reject only catastrophic folds, not "worse-than-WT". The pocket
+    # gates (delta/pae/plddt) are noisy single-sample — catalytic residues are unchanged by
+    # construction, so the WT-relative pocket delta is dominated by ESMFold2 noise (floor ~1.5A,
+    # median ~7A). Barrel topology is the reliable catastrophe signal.
+    veto_pocket_distance: false   # flag-only: record fold_pocket_max_delta_a but never veto on it
+    min_barrel_contact_frac: 0.55 # was 0.65; catastrophe = lost ~45% of long-range barrel contacts
+    max_pocket_delta_a: 4.0       # retained as the recorded flag threshold (no longer vetoes)
+    max_pocket_pae: 16.0          # was 12.0; WT pocket pAE ≈9.3, catastrophe well above
+    min_pocket_plddt: 0.40        # ESMFold2 plddt is 0–1 (NOT AlphaFold 0–100); WT pocket ≈0.60,
+    #                               catastrophe gate well below WT (was 0.5, too close to WT/noise)
+  score_stability:
+    max_total_ddg: 5.0       # kcal/mol; legacy soft cutoff for downstream inspection
+    pdb_chain: A             # all structure votes use prep_wt/wt.pdb chain A only
+    gate_tiers: [hard, high_risk]  # do_not_mutate tiers that hard-veto candidates
+    thermompnn_repo: docker/repos/ThermoMPNN-D
+    thermompnn_ssm_csv: ""   # optional precomputed single-SSM CSV; skips model run when set
+    thermompnn_threshold: 100.0   # save all single mutants, not only stabilizing hits
+    thermompnn_batch_size: 256
+    spurs_repo_id: cyclization9/SPURS
+    spurs_device: auto
+    spurs_batch_size: 64
+    spurs_score_sign: 1.0    # raw SPURS output is already funnel-aligned (positive=destabilizing).
+                             # Validated empirically (run smoke_full_20260630_0254): with -1.0 SPURS
+                             # ANTI-correlated with the 3 other votes (Spearman ≈ -0.87/-0.51/-0.49);
+                             # +1.0 makes it agree. The -1.0 "opposite ddG_ML sign" guess was wrong.
+    proteinmpnn_repo: docker/repos/ProteinMPNN
+    proteinmpnn_weights: ""  # optional folder containing v_48_020.pt; empty uses upstream default
+    proteinmpnn_model_name: v_48_020
+    proteinmpnn_num_seq_per_target: 4
+    proteinmpnn_batch_size: 1
+  score_stability.esmc:      # sequence-only ESMC-6B ΔΔG vote (Ч3); structure votes use the group above
+    esmc_6b_model_id: biohub/ESMC-6B   # same backbone as the stage-02 stability probe
+    embed_cache_dir: workspace/embed_cache
+    batch_size: 32                      # penultimate masked-mean forward (whole-seq pool)
+  portfolio:
+    n_select: 6
+    min_brightness_margin: 0.6   # × WT, stricter than the 0.3 floor
+    max_per_pair: 2              # ≤2 slots sharing one (strategy, bucket) pair
+    upside_sources: [sampler]    # `source` substrings eligible for the upside slot
+    team_name: DOGMA

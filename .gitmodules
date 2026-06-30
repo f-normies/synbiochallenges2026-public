@@ -1,0 +1,18 @@
+[submodule "docker/repos/ProteinMPNN"]
+	path = docker/repos/ProteinMPNN
+	url = https://github.com/dauparas/ProteinMPNN
+[submodule "docker/repos/LigandMPNN"]
+	path = docker/repos/LigandMPNN
+	url = https://github.com/dauparas/LigandMPNN
+[submodule "docker/repos/ThermoMPNN-D"]
+	path = docker/repos/ThermoMPNN-D
+	url = https://github.com/Kuhlman-Lab/ThermoMPNN-D
+[submodule "docker/repos/SPURS"]
+	path = docker/repos/SPURS
+	url = https://github.com/luo-group/SPURS
+[submodule "docker/repos/evodiff"]
+	path = docker/repos/evodiff
+	url = https://github.com/microsoft/evodiff
+[submodule "docker/repos/esm"]
+	path = docker/repos/esm
+	url = https://github.com/Biohub/esm

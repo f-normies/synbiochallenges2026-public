@@ -1,0 +1,3 @@
+# LocalExecutor: synrun child processes inside the current srun allocation.
+type: local
+synrun_bin: synrun

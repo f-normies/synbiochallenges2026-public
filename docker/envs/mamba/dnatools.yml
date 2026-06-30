@@ -1,0 +1,23 @@
+name: dnatools
+# CPU-only DNA-side gate + pipeline orchestration / rank aggregation.
+# ViennaRNA and Foldseek are bioconda binaries (cannot be pip-installed).
+channels: [conda-forge, bioconda]
+dependencies:
+  - python=3.10
+  - pip
+  - viennarna
+  - foldseek
+  - biotite
+  - biopython
+  - pandas
+  - pyarrow
+  - "numpy<2"
+  - scipy
+  - networkx
+  - matplotlib
+  - pyyaml
+  - pytest
+  - pip:
+      - dnachisel
+      - freesasa
+      - hydra-core>=1.3
