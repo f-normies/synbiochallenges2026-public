@@ -26,6 +26,13 @@ git clone --recursive https://github.com/f-normies/synbiochallenges2026-public
 git submodule update --init
 ```
 
+Fetch the non-HuggingFace checkpoints into `weights/` (idempotent; needs the submodules
+initialized — the ThermoMPNN-D ensemble ckpts are copied from the pinned submodule):
+
+```bash
+bash scripts/download_weights.sh
+```
+
 ## Setup & run — containerless native envs (recommended)
 
 The tools run in shared, read-only micromamba envs built once by `env/bootstrap.sh`
