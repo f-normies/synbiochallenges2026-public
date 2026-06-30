@@ -11,56 +11,17 @@ keeping the mutation budget small. Brightness is ranked with **calibrated magnit
 (`B̂`, in ×WT); stability is **rank-only** (out-of-distribution at 72 °C, dominated by
 irreversible aggregation, so it is engineered constructively rather than scored).
 
-## Repository layout
-
-- `src/synbio/orchestrator/` — file-DAG runner, stage contract, registry, manifest, executor.
-- `src/synbio/stages/` — one module per funnel stage (import-safe `SPEC` + lazy `run()`).
-- `src/synbio/probes/` — light, CPU-testable probe logic: calibrated ridge + isotonic,
-  regime-based held-out eval, DMS brightness dataset.
-- `src/synbio/esmc/` — ESMC access (lazy torch): frozen-embedding pooling
-  (mean/cls/max + chromophore/pocket/aromatic shells) + disk cache, pocket-index resolution.
-- `src/synbio/fold/` — chromophore-aware ESMFold2 adapter + pocket/barrel geometry decision.
-- `src/synbio/generate/` — combinatorial / LigandMPNN / ESMC-sampler generators + merge.
-- `src/synbio/stability/` — structure-based ΔΔG vote plumbing.
-- `src/synbio/portfolio/` — final 6-sequence selection + `submission.csv` emission.
-- `src/synbio/wt/`, `src/synbio/io/` — WT validation + design masks + position-tolerance map;
-  `candidates.parquet` schema + hard sequence constraints.
-- `run/conf/` — Hydra configs (every threshold / pool size / temperature lives here, not in code).
-- `docker/` — image build, env manifests, `synrun` launcher, smoke tests.
-- `env/` — containerless native-env bootstrap (shared micromamba root) + `synrun`.
-- `data/` — frozen WT reference (sfGFP), Sarkisyan DMS, Megascale, exclusion list, SASA.
-- `weights/` — placeholder; non-HF checkpoints live here at runtime (gitignored, never committed).
-- `scripts/compute_sfgfp_sasa.py` — offline one-shot: relative SASA of the frozen WT monomer.
-
-## Pipeline
-
-The funnel is a process-level file DAG (`~2500 near-WT candidates → 500 → ~60 → 6`).
-Each tool lives in its own micromamba env (incompatible torch/CUDA stacks), so the
-orchestrator runs in the light `dnatools` env and invokes each stage in its own env via
-`synrun <env> <cmd>`. Stages communicate through `candidates.parquet` on a shared volume.
-
-```
-prep_wt → {train_probes.brightness, train_probes.stability}
-        → generate.{ligandmpnn, combinatorial, sampler} → generate.merge
-        → filter_brightness
-        → score_stability.{thermompnn, spurs, proteinmpnn, esmc}
-        → rank_combine → fold_sanity → portfolio → submission.csv
-```
-
-`prep_wt` also derives a per-position **tolerance map** from the Sarkisyan DMS that bounds
-all generation. `rank_combine` ranks by `R = B̂ × σ_stab` (brightness magnitude × stability
-rank-percentile). `fold_sanity` is a chromophore-aware ESMFold2 **negative filter** (CRO at
-positions 65–67), not a ranker. `portfolio` selects the diversified final 6 and writes
-`submission.csv`. Results and a decision manifest land in `workspace/runs/<run_id>/`.
-
 ## Requirements
 
-This targets a **Linux SLURM cluster with an NVIDIA GPU** (developed on 2× V100S 32 GB).
-ESMC-6B and ESMFold2 weights are pulled from HuggingFace at runtime (not committed). The
-upstream tools under `docker/repos/*` are pinned git submodules.
+This targets a **Linux machine with an NVIDIA GPU** (developed on 2× V100S 32 GB) — a SLURM
+cluster or baremetal. The upstream tools under `docker/repos/*` are pinned git submodules.
+
+Model weights are **not committed**. Pulled from **HuggingFace** at runtime: **ESMC-6B**,
+**ESMC-600M**, **ESMFold2**, and **SPURS**. The non-HuggingFace checkpoints — **ProteinMPNN**,
+**LigandMPNN**, and **ThermoMPNN** — go under `weights/` (gitignored).
 
 ```bash
-git clone --recursive <this-repo-url>
+git clone --recursive https://github.com/f-normies/synbiochallenges2026-public
 # or, if you already cloned without --recursive:
 git submodule update --init
 ```
@@ -140,16 +101,3 @@ the heavy envs:
 python -m venv .venv && source .venv/bin/activate   # Python 3.10
 pip install -e ".[dev]"
 ```
-
-## Model & data notes
-
-- `esm` env carries the EvolutionaryScale **ESM SDK** + the Biohub **transformers fork**.
-  ESMC frozen-embedding probes load via the HF fork (`ESMCModel.from_pretrained("biohub/ESMC-6B")`,
-  fp16) — the SDK's `ESMC.from_pretrained` loader is avoided (meta-tensor error on some clusters).
-  **ESMFold2** loads via the SDK; in native (non-fused-kernel) envs it must run in **fp32**.
-- The brightness probe pools **layer-24 chromophore-shell (aromatic)** embeddings of the
-  avGFP lineage and fits a **calibrated ridge** (dead-floor-down-weighted ridge + full-range
-  isotonic; scikit-learn isotonic at fit time only — predict/load stay pure-numpy).
-- WT is the FPbase sfGFP (238 aa), byte-consistent with PDB **2B3P**; `data/sfgfp_wt.*` is frozen.
-- Large datasets in `data/` (Sarkisyan DMS, Tsuboyama 2023 Megascale, exclusion list) are
-  redistributed third-party / competition data; cite the originals if you reuse them.
